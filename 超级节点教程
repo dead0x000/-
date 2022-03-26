@@ -1,0 +1,77 @@
+一、安装docker
+# 1.要求系统内核在3.10版本以上，检查内核
+  uname -r
+# 2.安装命令
+  yum install docker
+# 3.启动docker
+ systemctl start docker
+# 4.设置开机自启
+  systemctl enable docker
+
+二、安装节点
+
+# 1. 创建目录, 保存节点数据
+mkdir -p /data/qk_node
+
+# 2. 切换到数据保存目录
+cd /data/qk_node
+
+# 3. 
+wget https://static.quarkblockchain.cn/app/pc/qk_poa.json -O qk_poa.json
+
+# 4. 
+docker run -it --rm -v /data/qk_node:/root/qk_node  chenjia404/qk_node init /root/qk_node/qk_poa.json --datadir /root/qk_node/qk_poa 
+
+# 5.
+wget https://static.quarkblockchain.cn/app/pc/static-nodes.json -O /data/qk_node/qk_poa/static-nodes.json
+
+# 6. 启动节点
+docker run -it --name qk_poa_node -v /data/qk_node:/root/qk_node -p 8545:8545 -p 30303:30303 -p 30303:30303/udp -d chenjia404/qk_node --syncmode snap --snapshot --datadir /root/qk_node/qk_poa --networkid 20181205 --v5disc --txpool.pricelimit 1000000000 --light.serve 20 --light.maxpeers 200 --maxpeers 2000 --http --http.addr 0.0.0.0 --http.vhosts "" --allow-insecure-unlock  --http.api "net,web3,eth,personal,clique,txpool" --http.corsdomain "*" console
+
+运行公共rpc节点，需要配置 http.vhosts ，里面配置你的域名，如果有多个域名，使用英文逗号(,)分割，另外不需要--allow-insecure-unlock 参数。
+
+# 7. 自动更新镜像
+docker run -d --name watchtower-qk-node --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup -i 3600  qk_poa_node
+
+
+
+docker stop qk_poa_node    关闭容器
+
+
+docker rm  qk_poa_node    删除容器
+
+
+yum install -y wget && wget -O install.sh http://download.bt.cn/install/install_6.0.sh && sh install.sh
+
+
+
+docker attach qk_poa_node
+
+
+
+# 创建目录
+mkdir -p /data/{qk_node,backup}
+
+# 创建钱包, 输入两次密码
+docker run --rm -it -v /data/qk_node:/root/qk_node chenjia404/qk_node:server account new --datadir /root/qk_node/qk_poa
+
+#密码写入文件
+echo "123456" > /data/qk_node/password
+
+# 备份钱包和密码
+cp -r /data/qk_node/password /data/backup/ \
+&& cp -r /data/qk_node/qk_poa/keystore /data/backup/
+
+# 启动节点&重置节点, 区块出问题需要整个重新跑节点
+docker rm -f qk_poa_node \
+    && rm -rf /data/qk_node \
+    && mkdir -p /data/qk_node \
+    && cd /data/qk_node \
+    && wget https://static.quarkblockchain.cn/app/pc/qk_poa.json -O qk_poa.json \
+    && docker run -it --rm -v /data/qk_node:/root/qk_node chenjia404/qk_node:server init /root/qk_node/qk_poa.json --datadir /root/qk_node/qk_poa \
+    && wget https://static.quarkblockchain.cn/app/pc/static-nodes.json -O /data/qk_node/qk_poa/static-nodes.json \
+    && cp -r /data/backup/password /data/qk_node/ \
+    && cp -r /data/backup/keystore/ /data/qk_node/qk_poa/ \
+    && docker run -idt --restart unless-stopped --name qk_poa_node -v /data/qk_node:/root/qk_node -p 30303:30303 -p 30303:30303/udp chenjia404/qk_node:server --syncmode snap --datadir /root/qk_node/qk_poa --networkid 20181205 --v5disc --unlock "0x3a3DeD5626056478B575a85081f622aB262c160F" --password /root/qk_node/password  --mine    --maxpeers 1000 console
+
+
